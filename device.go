@@ -36,16 +36,22 @@ func Connect(device1 *Device, device2 *Device) error {
 	newLink := make(chan []byte)
 	// There should be available links on both devices
 	var port1, port2 int
-	for port1, link := range device1.links {
+	var link chan []byte
+	for port1, link = range device1.links {
 		if link == nil {
 			break
 		}
+
+	}
+	for port2, link = range device2.links {
+		if link == nil {
+			break
+		}
+	}
+	if port1 == len(device1.links)-1 {
 		return fmt.Errorf("no port available for %v (%v ports)", device1.nickname, port1)
 	}
-	for port2, link := range device2.links {
-		if link == nil {
-			break
-		}
+	if port2 == len(device2.links)-1 {
 		return fmt.Errorf("no port available for %v (%v ports)", device2.nickname, port2)
 	}
 	device1.links[port1] = newLink
@@ -89,14 +95,14 @@ func (device *Device) SendPacket(to []byte, packetL3 []byte) error {
 func (device *Device) ReceivePacket(port int, packetL2 []byte) error {
 	// Register sender MAC in cache
 	packetL3, from, to := L2toL3(packetL2)
-	device.macCache[port] = from
-	fmt.Println(from)
 	// Check if MAC is own or broadcast
 	if bytes.Equal(device.MAC, to) {
-		device.Log("packet received from %x : %x", from, packetL3)
+		device.Log("packet received from %x: %x", from, packetL3)
 	} else {
 		device.Log("packet dropped from %x", from)
 	}
+	device.Log("updating cache for port %v: %x", port, from)
+	device.macCache[port] = from
 	return nil
 }
 
