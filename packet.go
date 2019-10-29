@@ -12,7 +12,7 @@ func L3toL2(packetL3 []byte, from []byte, to []byte) ([]byte, error) {
 		return nil, fmt.Errorf("packet size is less than 64: %d", len(packetL3))
 	}
 	packetL2 = append([]byte{8, 0}, packetL3...)
-	packetL2 = append(from, packetL3...)
+	packetL2 = append(from, packetL2...)
 	packetL2 = append(to, packetL2...)
 	return packetL2, nil
 }
