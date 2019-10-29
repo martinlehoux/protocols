@@ -1,8 +1,9 @@
 package protocols_test
 
 import (
-	"protocols"
 	"testing"
+
+	"github.com/martinlehoux/protocols"
 )
 
 func TestCreateDevice(t *testing.T) {
