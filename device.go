@@ -77,7 +77,7 @@ func (device *Device) SendPacket(to []byte, packetL3 []byte) error {
 	device.Log("sending packet to %x", to)
 	packetL2, err := L3toL2(packetL3, device.MAC, to)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	// Try to find MAC in MAC table
 	if port := device.findMACCache(to); port == -1 {
