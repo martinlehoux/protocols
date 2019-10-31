@@ -1,0 +1,7 @@
+language: go
+go: master
+
+install:
+  - echo "nothing to do"
+script:
+  - go test
