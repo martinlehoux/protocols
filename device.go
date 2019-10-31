@@ -8,11 +8,11 @@ import (
 
 // Device represent any hardware device in real life
 type Device struct {
-	nickname     string
-	MAC          []byte
-	sendLinks    [24]chan []byte
-	receiveLinks [24]chan []byte
-	macCache     map[int][]byte
+	nickname      string
+	MAC           []byte
+	sendIfnets    [24]chan []byte
+	receiveIfnets [24]chan []byte
+	macCache      map[int][]byte
 }
 
 // Log enable Logging for a device
@@ -33,32 +33,32 @@ func CreateDevice(nickname string) Device {
 
 // Connect two devices together
 func Connect(device1 *Device, device2 *Device) error {
-	newLink12 := make(chan []byte)
-	newLink21 := make(chan []byte)
-	// There should be available links on both devices
+	newIfnet12 := make(chan []byte)
+	newIfnet21 := make(chan []byte)
+	// There should be available ifnets on both devices
 	var port1, port2 int
-	var link chan []byte
-	for port1, link = range device1.sendLinks {
-		if link == nil {
+	var ifnet chan []byte
+	for port1, ifnet = range device1.sendIfnets {
+		if ifnet == nil {
 			break
 		}
 
 	}
-	for port2, link = range device2.sendLinks {
-		if link == nil {
+	for port2, ifnet = range device2.sendIfnets {
+		if ifnet == nil {
 			break
 		}
 	}
-	if port1 == len(device1.sendLinks)-1 {
+	if port1 == len(device1.sendIfnets)-1 {
 		return fmt.Errorf("no port available for %v (%v ports)", device1.nickname, port1)
 	}
-	if port2 == len(device2.sendLinks)-1 {
+	if port2 == len(device2.sendIfnets)-1 {
 		return fmt.Errorf("no port available for %v (%v ports)", device2.nickname, port2)
 	}
-	device1.sendLinks[port1] = newLink12
-	device2.receiveLinks[port2] = newLink12
-	device2.sendLinks[port2] = newLink21
-	device1.receiveLinks[port1] = newLink21
+	device1.sendIfnets[port1] = newIfnet12
+	device2.receiveIfnets[port2] = newIfnet12
+	device2.sendIfnets[port2] = newIfnet21
+	device1.receiveIfnets[port1] = newIfnet21
 	fmt.Printf("%v:%v <-> %v:%v\n", device1.nickname, port1, device2.nickname, port2)
 	return nil
 }
@@ -83,10 +83,10 @@ func (device *Device) SendPacket(to []byte, packetL3 []byte) error {
 	if port := device.findMACCache(to); port == -1 {
 		device.Log("no cache found for %x", to)
 		// If not found, send to all ports
-		for port, link := range device.sendLinks {
-			if link != nil {
+		for port, ifnet := range device.sendIfnets {
+			if ifnet != nil {
 				device.Log("sending packet on port %v", port)
-				link <- packetL2
+				ifnet <- packetL2
 			}
 		}
 
@@ -94,7 +94,7 @@ func (device *Device) SendPacket(to []byte, packetL3 []byte) error {
 		// If found, send only on port
 		device.Log("cache found for MAC:%x", to)
 		device.Log("sending packet on port %v", port)
-		device.sendLinks[port] <- packetL2
+		device.sendIfnets[port] <- packetL2
 	}
 	return nil
 }
@@ -115,9 +115,9 @@ func (device *Device) ReceivePacket(port int, packetL2 []byte) error {
 }
 
 func (device *Device) runPort(port int) {
-	link := device.receiveLinks[port]
+	ifnet := device.receiveIfnets[port]
 	for {
-		packet := <-link
+		packet := <-ifnet
 		device.ReceivePacket(port, packet)
 	}
 
@@ -125,7 +125,7 @@ func (device *Device) runPort(port int) {
 
 // Run device loop
 func (device *Device) Run() {
-	for port := range device.receiveLinks {
+	for port := range device.receiveIfnets {
 		go device.runPort(port)
 	}
 }
