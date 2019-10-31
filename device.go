@@ -6,12 +6,18 @@ import (
 	"fmt"
 )
 
+// Ifnet represent a network interface of a device
+type Ifnet struct {
+	channel   chan []byte
+	IPAddress [16]byte
+}
+
 // Device represent any hardware device in real life
 type Device struct {
 	nickname      string
 	MAC           []byte
-	sendIfnets    [24]chan []byte
-	receiveIfnets [24]chan []byte
+	sendIfnets    [24]Ifnet
+	receiveIfnets [24]Ifnet
 	macCache      map[int][]byte
 }
 
@@ -33,40 +39,39 @@ func CreateDevice(nickname string) Device {
 
 // Connect two devices together
 func Connect(device1 *Device, device2 *Device) error {
-	newIfnet12 := make(chan []byte)
-	newIfnet21 := make(chan []byte)
+	var newIfnet12, newIfnet21 Ifnet
 	// There should be available ifnets on both devices
-	var port1, port2 int
-	var ifnet chan []byte
-	for port1, ifnet = range device1.sendIfnets {
-		if ifnet == nil {
+	var index1, index2 int
+	var ifnet Ifnet
+	for index1, ifnet = range device1.sendIfnets {
+		if ifnet.channel == nil {
 			break
 		}
 
 	}
-	for port2, ifnet = range device2.sendIfnets {
-		if ifnet == nil {
+	for index2, ifnet = range device2.sendIfnets {
+		if ifnet.channel == nil {
 			break
 		}
 	}
-	if port1 == len(device1.sendIfnets)-1 {
-		return fmt.Errorf("no port available for %v (%v ports)", device1.nickname, port1)
+	if index1 == len(device1.sendIfnets)-1 {
+		return fmt.Errorf("no interface available for %v (%v interfaces)", device1.nickname, index1)
 	}
-	if port2 == len(device2.sendIfnets)-1 {
-		return fmt.Errorf("no port available for %v (%v ports)", device2.nickname, port2)
+	if index2 == len(device2.sendIfnets)-1 {
+		return fmt.Errorf("no interface available for %v (%v interfaces)", device2.nickname, index2)
 	}
-	device1.sendIfnets[port1] = newIfnet12
-	device2.receiveIfnets[port2] = newIfnet12
-	device2.sendIfnets[port2] = newIfnet21
-	device1.receiveIfnets[port1] = newIfnet21
-	fmt.Printf("%v:%v <-> %v:%v\n", device1.nickname, port1, device2.nickname, port2)
+	device1.sendIfnets[index1] = newIfnet12
+	device2.receiveIfnets[index2] = newIfnet12
+	device2.sendIfnets[index2] = newIfnet21
+	device1.receiveIfnets[index1] = newIfnet21
+	fmt.Printf("%v:%v <-> %v:%v\n", device1.nickname, index1, device2.nickname, index2)
 	return nil
 }
 
 func (device *Device) findMACCache(MAC []byte) int {
-	for port, mac := range device.macCache {
+	for index, mac := range device.macCache {
 		if bytes.Equal(mac, MAC) {
-			return port
+			return index
 		}
 	}
 	return -1
@@ -80,27 +85,27 @@ func (device *Device) SendPacket(to []byte, packetL3 []byte) error {
 		return err
 	}
 	// Try to find MAC in MAC table
-	if port := device.findMACCache(to); port == -1 {
+	if index := device.findMACCache(to); index == -1 {
 		device.Log("no cache found for %x", to)
-		// If not found, send to all ports
-		for port, ifnet := range device.sendIfnets {
-			if ifnet != nil {
-				device.Log("sending packet on port %v", port)
-				ifnet <- packetL2
+		// If not found, send to all in
+		for index, ifnet := range device.sendIfnets {
+			if ifnet.channel != nil {
+				device.Log("sending packet on interface %v", index)
+				ifnet.channel <- packetL2
 			}
 		}
 
 	} else {
-		// If found, send only on port
+		// If found, send only on interface
 		device.Log("cache found for MAC:%x", to)
-		device.Log("sending packet on port %v", port)
-		device.sendIfnets[port] <- packetL2
+		device.Log("sending packet on interface %v", index)
+		device.sendIfnets[index].channel <- packetL2
 	}
 	return nil
 }
 
 // ReceivePacket is the routine for a device receiving a packet
-func (device *Device) ReceivePacket(port int, packetL2 []byte) error {
+func (device *Device) ReceivePacket(index int, packetL2 []byte) error {
 	// Register sender MAC in cache
 	packetL3, from, to := L2toL3(packetL2)
 	// Check if MAC is own or broadcast
@@ -109,23 +114,23 @@ func (device *Device) ReceivePacket(port int, packetL2 []byte) error {
 	} else {
 		device.Log("packet dropped from %x", from)
 	}
-	device.Log("updating cache for port %v: %x", port, from)
-	device.macCache[port] = from
+	device.Log("updating cache for interface %v: %x", index, from)
+	device.macCache[index] = from
 	return nil
 }
 
-func (device *Device) runPort(port int) {
-	ifnet := device.receiveIfnets[port]
+func (device *Device) runInterface(index int) {
+	ifnet := device.receiveIfnets[index]
 	for {
-		packet := <-ifnet
-		device.ReceivePacket(port, packet)
+		packet := <-ifnet.channel
+		device.ReceivePacket(index, packet)
 	}
 
 }
 
 // Run device loop
 func (device *Device) Run() {
-	for port := range device.receiveIfnets {
-		go device.runPort(port)
+	for index := range device.receiveIfnets {
+		go device.runInterface(index)
 	}
 }
