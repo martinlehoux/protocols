@@ -9,7 +9,7 @@ import (
 // Ifnet represent a network interface of a device
 type Ifnet struct {
 	channel   chan []byte
-	IPAddress [16]byte
+	IPAddress IPv6
 }
 
 // Device represent any hardware device in real life
