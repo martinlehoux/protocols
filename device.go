@@ -1,5 +1,7 @@
 package protocols
 
+// BUG(kagamino) Connections created after device.Run() don't work
+
 import (
 	"bytes"
 	"crypto/rand"
@@ -27,19 +29,44 @@ func (device *Device) Log(str string, a ...interface{}) {
 	fmt.Printf("[%v:%x] %s\n", device.nickname, device.MAC, str)
 }
 
-// CreateDevice creates a new device with a nickname and generate its MAC
+// CreateDevice creates a new device with a nickname and generate its MAC and localhost ifnet
 func CreateDevice(nickname string) Device {
 	// Manufacturer MAC prefix
 	prefix := []byte{0xff, 0xff, 0xff}
 	MAC := make([]byte, 3)
 	rand.Read(MAC)
 	MAC = append(prefix, MAC...)
-	return Device{nickname: nickname, MAC: MAC, macCache: make(map[int][]byte)}
+	device := Device{nickname: nickname, MAC: MAC, macCache: make(map[int][]byte)}
+	// Connect device to itself
+	Connect(&device, &device)
+	// Connected ifnet is index 0
+	device.sendIfnets[0].IPAddress = IPv6LocalHost
+	device.receiveIfnets[0].IPAddress = IPv6LocalHost
+	return device
+}
+
+func (device *Device) PrintIfnetsTable() {
+	// Send and receive should be the same
+	// TODO: one array but two channels
+	fmt.Printf("INTERFACES TABLES: %v\t%x\n", device.nickname, device.MAC)
+	for i, ifnet := range device.sendIfnets {
+		if ifnet.channel != nil {
+			fmt.Printf("%v\t%v\t\n", i, ifnet.IPAddress)
+		}
+	}
+}
+
+func (device *Device) PrintMACCacheTable() {
+	fmt.Printf("MAC CACHE TABLES: %v\n", device.nickname)
+	for index, mac := range device.macCache {
+		fmt.Printf("%v\t%x\n", index, mac)
+	}
 }
 
 // Connect two devices together
 func Connect(device1 *Device, device2 *Device) error {
-	var newIfnet12, newIfnet21 Ifnet
+	var chan12, chan21 = make(chan []byte), make(chan []byte)
+	var newIfnet12, newIfnet21 = Ifnet{channel: chan12}, Ifnet{channel: chan21}
 	// There should be available ifnets on both devices
 	var index1, index2 int
 	var ifnet Ifnet
@@ -64,7 +91,9 @@ func Connect(device1 *Device, device2 *Device) error {
 	device2.receiveIfnets[index2] = newIfnet12
 	device2.sendIfnets[index2] = newIfnet21
 	device1.receiveIfnets[index1] = newIfnet21
-	fmt.Printf("%v:%v <-> %v:%v\n", device1.nickname, index1, device2.nickname, index2)
+	if !bytes.Equal(device1.MAC, device2.MAC) {
+		fmt.Printf("%v:%v <-> %v:%v\n", device1.nickname, index1, device2.nickname, index2)
+	}
 	return nil
 }
 
