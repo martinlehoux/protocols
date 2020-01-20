@@ -12,6 +12,7 @@ type IPv6 [8]int
 // IPv6LocalHost is the localhost ipv6 address for a device
 var IPv6LocalHost IPv6 = IPv6{0, 0, 0, 0, 0, 0, 0, 1}
 
+// StringToIPv6 converts a string to IPv6 bytes
 func StringToIPv6(str string) (IPv6, error) {
 	strs := strings.Split(str, ":")
 	ipv6 := new(IPv6)
