@@ -1,0 +1,14 @@
+# List devices
+create:
+  - name: router
+  - name: device 1
+  - name: device 2
+connect:
+  - [router, device 1]
+  - [router, device 2]
+script:
+  - cmd: send
+    args:
+      from: device 1
+      to: router
+      packet: hello world
